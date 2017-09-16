@@ -1,0 +1,34 @@
+# vi: set ft=ruby :                                                                                                                                                                                [16/3133]
+
+# All Vagrant configuration is done below. The "2" in Vagrant.configure
+# configures the configuration version (we support older styles for
+# backwards compatibility). Please don't change it unless you know what
+# you're doing.
+
+VAGRANTFILE_API_VERSION = "2"
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+
+  #config.vm.synced_folder ".", "/vagrant", type:"virtualbox"
+
+  if Vagrant.has_plugin?("vagrant-timezone")
+    config.timezone.value = "Asia/Tokyo"
+  end
+
+  config.vm.box = "ubuntu/xenial64"
+
+  N=3
+
+  (1..N).each do |machine_id|
+    config.vm.define "mysql0#{machine_id}" do |machine|
+      machine.vm.hostname = "mysql0#{machine_id}"
+      machine.vm.network "private_network", ip: "192.168.10.#{64+machine_id}"
+
+      machine.vm.provision :ansible do |ansible|
+        ansible.limit = "all"
+        ansible.playbook = "provisioning/mysql.yml"
+        ansible.inventory_path = "provisioning/mysql0#{machine_id}"
+      end
+    end
+  end
+
+end

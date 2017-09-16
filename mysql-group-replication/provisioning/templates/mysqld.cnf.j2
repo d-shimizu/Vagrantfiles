@@ -1,0 +1,60 @@
+[mysqld_safe]
+socket          = /var/run/mysqld/mysqld.sock
+nice            = 0
+
+[mysqld]
+#
+# * Basic Settings
+#
+#server_id = {{ server_id }}
+server_id = {{ mysql_server_id.stdout }}
+user            = mysql
+pid-file        = /var/run/mysqld/mysqld.pid
+socket          = /var/run/mysqld/mysqld.sock
+port            = 3306
+basedir         = /usr
+datadir         = /var/lib/mysql/
+tmpdir          = /tmp
+skip-external-locking
+slow_query_log          = 1
+slow_query_log_file     = /var/log/mysql/mysql-slow.log
+log-error       = /var/log/mysql/mysql-error.log
+log_timestamps = SYSTEM
+explicit_defaults_for_timestamp = true
+#
+# * Binary-log setting
+#
+log_bin = /var/log/mysql/mysql-bin.log
+binlog_format = ROW
+#
+# * General replication settings
+#
+gtid_mode = ON
+enforce_gtid_consistency = ON
+master_info_repository = TABLE
+relay_log_info_repository = TABLE
+binlog_checksum = NONE
+log_slave_updates = ON
+transaction_write_set_extraction = XXHASH64
+loose-group_replication_bootstrap_group = OFF
+loose-group_replication_start_on_boot = OFF
+loose-group_replication_ssl_mode = DISABLED
+loose-group_replication_recovery_use_ssl = 0
+#
+# * Replication group settings
+#
+#loose-group_replication_group_name = "537548f2-1062-4adc-8026-976ceeae1f51"
+loose-group_replication_group_name = {{ uuid.stdout }}
+loose-group_replication_ip_whitelist = "192.168.10.0/24"
+loose-group_replication_group_seeds= "192.168.10.65:13306,192.168.10.66:13306,192.168.10.67:13306"
+loose-group_replication_local_address= "{{ ansible_enp0s8.ipv4.address }}:13306"
+#
+# * Multi-primary mode settings
+#
+loose-group_replication_single_primary_mode = OFF
+loose-group_replication_enforce_update_everywhere_checks = ON
+#
+# * Host specific replication configuration
+#
+report_host = "{{ ansible_enp0s8.ipv4.address }}"
+report_port = 3306

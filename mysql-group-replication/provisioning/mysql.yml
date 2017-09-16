@@ -1,0 +1,135 @@
+- hosts: vagrants
+  #sudo: true
+  user: vagrant
+  gather_facts: no
+  become: yes
+  vars:
+    mysql_user: root
+    mysql_root_password: password
+
+  pre_tasks:
+    - name: Install python-simplejson
+      raw: (test -e /usr/bin/python && test -e /usr/bin/apt) || (apt -y update && apt install -y python-simplejson)
+    - name: Enable Gathers facts
+      setup:
+
+  tasks:
+    #- name: install packages zsh
+    #  apt: name=zsh update_cache=yes
+
+    - name: Download MySQL Apt Config
+      apt:
+        deb: https://dev.mysql.com/get/mysql-apt-config_0.8.6-1_all.deb
+        dpkg_options: 'force-confold,force-confdef'
+
+    - name: Install MySQL Server
+      apt:
+        name: "{{ item }}"
+        state: latest
+        dpkg_options: 'force-confold,force-confdef'
+        update_cache: yes
+      with_items:
+        - mysql-server
+        - mysql-community-server
+        - mysql-client
+        - mysql-community-client
+        - python-mysqldb
+
+    - name: Change root password
+      mysql_user:
+        name: "root"
+        host: "{{ item }}"
+        password: "{{ mysql_root_password }}"
+      with_items:
+        - 127.0.0.1
+        - ::1
+        - localhost.localdomain
+        - localhost
+
+    - name: generate server-id
+      shell:
+        hostname -I | sed -e 's/ /./' | awk -F. '{print $1 + +$2 + $3 + $4 + $5 + $6 + $7+ $8 + 10000 }'
+      register: mysql_server_id
+
+    - name: generate server-id
+      shell: uuidgen
+      register: uuid
+
+    - name: replace mysqld.conf
+      #template: src=templates/mysql.cnf.j2 dest=/etc/mysql/mysql.conf.d/mysqld.cnf
+      template: src={{ inventory_dir }}/templates/mysqld.cnf.j2 dest=/etc/mysql/mysql.conf.d/mysqld.cnf
+      #register: last_result
+
+    - name: replace .my.conf
+      #template: src=templates/mysql.cnf.j2 dest=/etc/mysql/mysql.conf.d/mysqld.cnf
+      #template: src={{ inventory_dir }}/templates/.my.cnf.j2 dest=/etc/mysql/mysql.conf.d/.my.cnf
+      template: src={{ inventory_dir }}/templates/.my.cnf.j2 dest=/root/.my.cnf
+
+    - name: restart service cron on centos, in all cases, also issue daemon-reload to pick up config changes
+      systemd:
+        state: restarted
+        daemon_reload: yes
+        name: mysql
+
+    - name: Create Replication User
+      mysql_user:
+        name: repl
+        password: password
+        host: "%"
+        priv: "*.*:REPLICATION SLAVE"
+        state: present
+        login_user: "{{ mysql_user }}"
+        login_password: "{{ mysql_root_password }}"
+
+    - name: Replication Setting
+      #shell: mysql -u root -p password -e "CHANGE MASTER TO MASTER_USER='repl', MASTER_PASSWORD='password' FOR CHANNEL 'group_replication_recovery'; exit;"
+      #shell: mysql --defaults-file=/etc/mysql/mysql.conf.d/.my.cnf -e "CHANGE MASTER TO MASTER_USER='repl', MASTER_PASSWORD='password' FOR CHANNEL 'group_replication_recovery'"
+      shell: mysql --defaults-file=/root/.my.cnf -e "CHANGE MASTER TO MASTER_USER='repl', MASTER_PASSWORD='password' FOR CHANNEL 'group_replication_recovery'"
+
+    - name: Check Group Replication Plugin
+      #shell: mysql --defaults-file=/etc/mysql/mysql.conf.d/.my.cnf -e "select * from information_schema.plugins where plugin_name='group_replication'" | wc -l
+      shell: mysql --defaults-file=/root/.my.cnf -e "select * from information_schema.plugins where plugin_name='group_replication'" | wc -l
+      register: result
+      ignore_errors: True
+
+    - name: Install Group Replication Plugin
+      #shell: mysql -u root -p password -e "INSTALL PLUGIN group_replication SONAME 'group_replication.so'; exit;"
+      #shell: mysql --defaults-file=/etc/mysql/mysql.conf.d/.my.cnf -e "INSTALL PLUGIN group_replication SONAME 'group_replication.so'"
+      shell: mysql --defaults-file=/root/.my.cnf -e "INSTALL PLUGIN group_replication SONAME 'group_replication.so'"
+      when: result.stdout == "0"
+
+    #- debug: var=result
+ 
+    - name: Check Group Replication Status
+      #shell: mysql --defaults-file=/etc/mysql/mysql.conf.d/.my.cnf -e "SELECT * FROM performance_schema.replication_group_members;" | grep OFFLINE | wc -l
+      shell: mysql --defaults-file=/root/.my.cnf -e "SELECT * FROM performance_schema.replication_group_members;" | grep OFFLINE | wc -l
+      register: gr_status
+      ignore_errors: True
+      when:
+        - inventory_hostname == '192.168.10.65'
+
+    - name: Start Group Replication on First Node
+      #shell: mysql --defaults-file=/etc/mysql/mysql.conf.d/.my.cnf -e "RESET MASTER; SET GLOBAL group_replication_bootstrap_group=ON; START GROUP_REPLICATION; SET GLOBAL group_replication_bootstrap_group=OFF;"
+      shell: mysql --defaults-file=/root/.my.cnf -e "RESET MASTER; SET GLOBAL group_replication_bootstrap_group=ON; START GROUP_REPLICATION; SET GLOBAL group_replication_bootstrap_group=OFF;"
+      #when: "'192.168.10.65' in inventory_hostname"
+      when:
+        #inventory_hostname == '192.168.10.65' and gr_result == "1"
+        - inventory_hostname == '192.168.10.65'
+        - gr_status.stdout == "1"
+
+    - name: Check Group Replication Status
+      #shell: mysql --defaults-file=/etc/mysql/mysql.conf.d/.my.cnf -e "SELECT * FROM performance_schema.replication_group_members;" | grep OFFLINE | wc -l
+      shell: mysql --defaults-file=/root/.my.cnf -e "SELECT * FROM performance_schema.replication_group_members;" | grep OFFLINE | wc -l
+      register: gr_status
+      ignore_errors: True
+      when:
+        - inventory_hostname != '192.168.10.65'
+
+    - name: Start Group Replication on Second And Third Node
+      #shell: mysql --defaults-file=/etc/mysql/mysql.conf.d/.my.cnf -e "RESET MASTER; START GROUP_REPLICATION;"
+      shell: mysql --defaults-file=/root/.my.cnf -e "RESET MASTER; START GROUP_REPLICATION;"
+      when:
+        #result.stdout.find('192.168.10.65') != 0 and gr_result == "1"
+        - inventory_hostname != '192.168.10.65'
+        #- gr_status == "1"
+
