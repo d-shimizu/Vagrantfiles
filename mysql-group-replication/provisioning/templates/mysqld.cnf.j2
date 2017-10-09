@@ -6,7 +6,6 @@ nice            = 0
 #
 # * Basic Settings
 #
-#server_id = {{ server_id }}
 server_id = {{ mysql_server_id.stdout }}
 user            = mysql
 pid-file        = /var/run/mysqld/mysqld.pid
@@ -43,8 +42,7 @@ loose-group_replication_recovery_use_ssl = 0
 #
 # * Replication group settings
 #
-#loose-group_replication_group_name = "537548f2-1062-4adc-8026-976ceeae1f51"
-loose-group_replication_group_name = {{ uuid.stdout }}
+loose-group_replication_group_name="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 loose-group_replication_ip_whitelist = "192.168.10.0/24"
 loose-group_replication_group_seeds= "192.168.10.65:13306,192.168.10.66:13306,192.168.10.67:13306"
 loose-group_replication_local_address= "{{ ansible_enp0s8.ipv4.address }}:13306"

@@ -1,4 +1,2 @@
 [vagrants]
 192.168.10.65
-[vagrants:vars]
-server_id=10001
