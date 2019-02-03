@@ -13,5 +13,5 @@ MySQL Group Replication 環境を構築するVagrantfileです。
 
 ## Author
 
-[d-shimizu](https://github.com/d-shimizu
+[daisukeshimizu](https://github.com/daisukeshimizu)
 
